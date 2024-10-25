@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your Companion</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        #chat-container {
+            max-width: 600px;
+            margin: auto;
+        }
+        #chat-box {
+            border: 1px solid #ccc;
+            padding: 10px;
+            width: 100%;
+            height: 400px;
+            overflow-y: scroll;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        .message {
+            display: block;
+            padding: 10px;
+            border-radius: 15px;
+            margin: 10px 0;
+            max-width: 75%;
+        }
+        .user {
+            background-color: #007BFF;
+            color: white;
+            text-align: right;
+            margin-left: auto;
+        }
+        .assistant {
+            background-color: #f1f1f1;
+            color: #007BFF;
+            text-align: left;
+            margin-right: auto;
+        }
+        #user-message {
+            width: calc(100% - 120px);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 15px;
+            margin-left: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        #typing-indicator {
+            font-style: italic;
+            color: #888;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <h1>Hear Me - Your Friendly Companion</h1>
+        <div id="chat-box"></div>
+        <div id="typing-indicator" style="display: none;"><span id="typing-voice"></span> is typing...</div>
+        <div style="margin-top: 10px;">
+            <input type="text" id="user-message" placeholder="Type your message here..." autocomplete="off">
+            <button id="send-btn">Send</button>
+            <button id="voice-btn">🎤 Speak</button>
+            <label for="voice-select">Select Voice:</label>
+            <select id="voice-select"></select>
+            <label for="language-select">Select Language:</label>
+            <select id="language-select">
+                <option value="en-US">English (US)</option>
+                <option value="es-ES">Spanish (Spain)</option>
+                <option value="fr-FR">French (France)</option>
+                <option value="de-DE">German (Germany)</option>
+            </select>
+        </div>
+    </div>
+
+    <audio id="response-audio" controls style="display:none;"></audio>
+
+    <script>
+        // Cache DOM elements
+        const chatBox = document.getElementById('chat-box');
+        const voiceSelect = document.getElementById('voice-select');
+        const languageSelect = document.getElementById('language-select');
+        const userMessageInput = document.getElementById('user-message');
+        const typingVoice = document.getElementById('typing-voice');
+        const sendButton = document.getElementById('send-btn');
+        const voiceButton = document.getElementById('voice-btn');
+
+        let allVoices = []; // Store all voices fetched from server
+        let introShown = false; // Track if the introduction has been shown
+        let isProcessing = false;
+
+        // Run initial setup
+        window.onload = function() {
+            populateVoiceList();
+        };
+
+        // Fetch available voices and populate the voice list
+        async function populateVoiceList() {
+            try {
+                const response = await fetch('/get-voices');
+                allVoices = await response.json();
+                filterVoices();
+                if (!introShown) showIntroduction();
+            } catch (error) {
+                console.error("Error fetching voices:", error);
+            }
+        }
+
+        // Filter voices based on selected language (locale) and exclude "Multilingual" voices
+        function filterVoices() {
+            const selectedLanguage = languageSelect.value;  // Get the exact locale value (e.g., 'fr-FR')
+            voiceSelect.innerHTML = '';  // Clear the voice select dropdown
+
+            // Filter voices to only show those that match the selected language locale (e.g., 'fr-FR') and exclude "Multilingual" voices
+            allVoices
+                .filter(voice => voice.lang === selectedLanguage && !voice.displayName.includes("Multilingual"))
+                .forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.name;
+                    option.textContent = `${voice.displayName} (${voice.lang})`;
+                    voiceSelect.appendChild(option);
+                });
+
+            // Automatically select the first voice and show introduction if not shown
+            if (voiceSelect.options.length > 0) {
+                voiceSelect.options[0].selected = true;
+                if (!introShown) showIntroduction();
+            }
+        }
+
+        // Show personalized introductory message
+        function showIntroduction() {
+            const selectedVoiceText = voiceSelect.selectedOptions[0].textContent.split(' (')[0]; // Get the selected voice name
+            appendMessage(selectedVoiceText, `Hello! I am ${selectedVoiceText}. I’m here to help you with anything you need. Feel free to ask me anything or just chat!`, 'assistant');
+            introShown = true;
+        }
+
+        // Handle sending the user message
+        sendButton.onclick = sendMessage;
+
+        async function sendMessage() {
+            const message = userMessageInput.value.trim();
+            if (!message || isProcessing) return;
+
+            const selectedVoiceText = voiceSelect.selectedOptions[0].textContent.split(' (')[0]; // Get voice name
+            appendMessage('You', message, 'user');
+            userMessageInput.value = ''; // Clear input
+            showTypingIndicator(selectedVoiceText);
+
+            try {
+                isProcessing = true;
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        voice: voiceSelect.value,
+                        assistant_name: selectedVoiceText,
+                        language: languageSelect.value
+                    })
+                });
+                const data = await response.json();
+                appendMessage(data.assistant_name, data.response, 'assistant');
+            } catch (error) {
+                appendMessage(selectedVoiceText, "Sorry, something went wrong. Please try again later.", 'assistant');
+                console.error("Error:", error);
+            } finally {
+                isProcessing = false;
+                hideTypingIndicator();
+            }
+        }
+
+        // Append a new message to the chat box
+        function appendMessage(sender, message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', type);
+            messageDiv.innerHTML = `<strong>${sender}:</strong> ${message.replace(/\n/g, '<br>')}`;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Show typing indicator
+        function showTypingIndicator(voiceName) {
+            typingVoice.innerText = voiceName;
+            document.getElementById('typing-indicator').style.display = 'block';
+        }
+
+        // Hide typing indicator
+        function hideTypingIndicator() {
+            document.getElementById('typing-indicator').style.display = 'none';
+        }
+
+        // Implement Speech Recognition (for the "Speak" button)
+        voiceButton.onclick = function () {
+            try {
+                const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = languageSelect.value; // Set recognition language based on the selected language
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                recognition.start();
+
+                recognition.onresult = function (event) {
+                    const message = event.results[0][0].transcript.trim();
+                    if (message) {
+                        userMessageInput.value = message;  // Set recognized speech to the input box
+                        sendMessage();  // Send the recognized message
+                    } else {
+                        appendMessage('Assistant', "I didn't catch anything. Please try speaking again.", 'assistant');
+                    }
+                };
+
+                recognition.onspeechend = function () {
+                    recognition.stop();
+                };
+
+                recognition.onerror = function (event) {
+                    console.error("Speech Recognition Error:", event.error);
+                    appendMessage('Assistant', "Sorry, I couldn't understand that. Please try again.", 'assistant');
+                };
+
+            } catch (error) {
+                console.error("Speech recognition not supported in this browser:", error);
+                appendMessage('Assistant', "Sorry, your browser doesn't support speech recognition.", 'assistant');
+            }
+        };
+
+        // Update voices when language is changed
+        languageSelect.addEventListener('change', filterVoices);
+
+    </script>
+</body>
+</html>
