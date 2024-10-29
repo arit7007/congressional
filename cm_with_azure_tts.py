@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Generate a secure SECRET_KEY
 app.config['SECRET_KEY'] = secrets.token_urlsafe(32)
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # Session timeout after 30 minutes
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # set session timeout to 30 minutes
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
@@ -45,7 +45,7 @@ LANGUAGE_VOICES = {
 
 
 def extract_user_name(conversation_history):
-    """Use GPT to extract the user's name from the conversation history."""
+    """Extract user's name if available from chat."""
     name_prompt = [
         {"role": "system",
          "content": "You are an assistant that extracts names from user conversations. If there is no name, respond with 'None'."},
@@ -67,7 +67,7 @@ def extract_user_name(conversation_history):
 
 
 def analyze_sentiment_gpt(user_message):
-    """Use OpenAI to analyze the sentiment of the user's message."""
+    """Analyze sentiment of the user's message to customize the response."""
     sentiment_prompt = [
         {"role": "system", "content": "You are a helpful assistant that analyzes the sentiment of the user's message."},
         {"role": "user",
@@ -142,8 +142,8 @@ def home():
 def chat():
     try:
         user_message = escape(request.json.get('message', '').strip())
-        selected_voice = request.json.get('voice', 'en-US-JennyNeural')  # Receive the voice selected from front-end
-        assistant_name = request.json.get('assistant_name', 'Jenny')  # Keep assistant name based on drop-down
+        selected_voice = request.json.get('voice', 'en-US-JennyNeural')
+        assistant_name = request.json.get('assistant_name', 'Jenny')
         preferred_language = request.json.get('language', 'english').lower()
     except Exception as e:
         logging.error(f"Error parsing user message: {e}")
@@ -168,39 +168,41 @@ def chat():
     session['conversation_history'].append({"role": "user", "content": user_message})
 
     # Extract the user's name if mentioned
-    user_name = extract_user_name(session['conversation_history'])  # Don't use a default like 'Friend'
+    user_name = extract_user_name(session['conversation_history'])
 
     # Limit conversation history to prevent overflow
     MAX_HISTORY_LENGTH = 20
     if len(session['conversation_history']) > MAX_HISTORY_LENGTH:
         session['conversation_history'] = session['conversation_history'][-MAX_HISTORY_LENGTH:]
 
-    # Generate assistant response with sentiment consideration and using the user's name
     system_content = (
         f"You are a compassionate and understanding companion. The user's current sentiment appears to be {user_sentiment}. "
-        f"Adjust your tone and approach based on this sentiment. "
+        "Adjust your tone and approach based on this sentiment. "
         "For positive sentiment, be encouraging and celebratory. "
         "For negative sentiment, be empathetic and supportive. "
         "For neutral sentiment, be gently inquisitive and engaging. "
         "Always prioritize active listening and emotional support. Avoid giving medical advice or making diagnoses."
     )
 
-    # Add language instruction to system content
+    # Add language instruction
     language_instruction = f"Respond to the user in {preferred_language.capitalize()}."
     system_content += f" {language_instruction}"
 
     system_message = {"role": "system", "content": system_content}
     messages = [system_message] + session['conversation_history']
 
-    # Use the same model (gpt-3.5-turbo) for all languages
     assistant_message = generate_response(messages)
     session['conversation_history'].append({"role": "assistant", "content": assistant_message})
 
-    # Occasionally address the user by their name if a name was extracted
+    # To do - begin
+    # Add logic for prompt injection and content moderation
+    # To do - end
+
+    # Occasionally address the user by their name if a name was extracted to keep it more friendly
     if random.random() < 0.3 and user_name:
         assistant_message = f"{user_name}, {assistant_message}"
 
-    # Ask about hobbies after every 5 interactions
+    # Ask about hobbies after every 5 interactions. Later change this part of the prompt - AP
     if session['interaction_count'] % 5 == 0:
         hobby_suggestion = (
             "By the way, I'd love to get to know you better. Do you have any hobbies or activities that you enjoy? "
@@ -208,13 +210,14 @@ def chat():
         )
         assistant_message += f" {hobby_suggestion}"
 
+
     # Use the voice selected from the front-end for speech synthesis
     synthesize_speech(assistant_message, voice=selected_voice)
 
-    # Always return the assistant's name from the drop-down, not 'Friend'
+    # Return the assistant's name from the drop-down
     return jsonify({"response": assistant_message, "assistant_name": assistant_name})
 
 
-# Ensure Flask server runs
+# run Flask server
 if __name__ == '__main__':
     app.run(debug=True)
