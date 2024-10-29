@@ -4,11 +4,11 @@
 
 ## Features
 
-- **AI-Powered Chatbot**: Uses OpenAI GPT to generate empathetic responses tailored to the user's message.
+- **AI-Powered Chatbot**: Uses OpenAI GPT to generate empathetic responses to the user's message.
 - **Sentiment Analysis**: Analyzes the user's message sentiment (positive, negative, or neutral) and adjusts responses accordingly.
-- **Azure Text-to-Speech**: Converts text responses into speech using Azure’s neural voices.
-- **Moderation Check**: Screens user messages to ensure compliance with content policies and filter inappropriate content.
-- **Session Management**: Maintains a conversation history with customizable session duration (default 30 minutes).
+- **Azure Text-to-Speech**: Converts text responses into speech using Azure’s text-to-speech cognitive services.
+- **Moderation Check**: Screens user messages to ensure compliance with content policies and filter inappropriate content, while maintaining empathetic response.
+- **Session Management**: Maintains a conversation history with customizable session duration (default 30 minutes). In the future, better memorization will be added
 - **Prompt Injection**: Check for prompt injection, and override with system default (TBD).
 
 ### Prerequisites
@@ -31,7 +31,7 @@ Set up the following environment variables before running the app:
 
 ### Running the application
 Clone the repository and navigate to the project folder.
-Install any dependencies
+Install any dependencies.
 Start the application:
 
 python cm_with_azure_tts.py
